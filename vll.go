@@ -25,6 +25,17 @@ func abs(n int) int {
 	return n
 }
 
+// how should exponentials work?
+// we could have a new type of bubble: a blue (or red) bubble
+// these bubbles could only be single loops
+// that doesn't seem so hard
+// characters ? and ! could work like tab for creating them
+//   note that the assumption pair code would need to be more complete for this to work
+
+// okay, how about additives?
+// and additive bubble consists of an outershell, along with a
+// I think it will need to be radial and
+
 // Now that MLL is basically working, what should we focus on next?
 // Pretty buggy still, should get some testing done
 // Implement deleting and adding loops
@@ -36,20 +47,22 @@ func abs(n int) int {
 func update(pg *page.Page) {
 	pg.Root.Iterate(func(b *page.Bubble) {
 		for i := 0; i < len(b.Children); i++ {
-			for j := i + 1; j < len(b.Children); j++ {
-				if page.Distance(b.Children[i], b.Children[j]) < float64(20.0*(b.Children[i].Height+b.Children[j].Height)+100) &&
-					b.Children[i] != pg.Grabbed && b.Children[j] != pg.Grabbed {
-					dx := 0
-					dy := 0
-					for dx*dy == 0 {
-						dx = int(2*math.Atan(float64(b.Children[i].X-b.Children[j].X))) + page.Random(-2, 2)
-						dy = int(2*math.Atan(float64(b.Children[i].Y-b.Children[j].Y))) + page.Random(-2, 2)
+			for j := 0; j < len(b.Children); j++ {
+				b.Children[j].Iterate(func(nibling *page.Bubble) {
+					if page.Distance(b.Children[i], nibling) < float64(30.0*(b.Children[i].Height+nibling.Height)+85) &&
+						b.Children[i] != pg.Grabbed && nibling != pg.Grabbed && i != j {
+						dx := 0
+						dy := 0
+						for dx*dy == 0 {
+							dx = int(2*math.Atan(float64(b.Children[i].X-nibling.X))) + page.Random(-2, 2)
+							dy = int(2*math.Atan(float64(b.Children[i].Y-nibling.Y))) + page.Random(-2, 2)
+						}
+						b.Children[i].X += dx
+						b.Children[i].Y += dy
+						nibling.X -= dx
+						nibling.Y -= dy
 					}
-					b.Children[i].X += dx
-					b.Children[i].Y += dy
-					b.Children[j].X -= dx
-					b.Children[j].Y -= dy
-				}
+				})
 			}
 		}
 	})
@@ -297,28 +310,30 @@ func run() {
 
 			if win.JustReleased(pixelgl.MouseButtonRight) {
 				owner := pg.BelongsTo(x, y)
-				if owner.Kind == page.BLACK {
-					if pg.AssumptionPair.Positive != nil && pg.AssumptionPair.Positive.Parent == owner {
-						// create new bubbles for assumption pair
-						pg.AssumptionPair.Negative = owner
-						newPositive := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.WHITE)
-						pg.AssumptionPair.Positive.Insert(newPositive)
-						pg.AssumptionPair.Positive = newPositive
-						newNegative := page.NewBubble(x, y, "", page.BLACK)
-						pg.AssumptionPair.Negative.Insert(newNegative)
-						pg.AssumptionPair.Negative = newNegative
+				if pg.AssumptionPair != nil {
+					if owner.Kind == page.BLACK {
+						if pg.AssumptionPair.Positive != nil && pg.AssumptionPair.Positive.Parent == owner {
+							// create new bubbles for assumption pair
+							pg.AssumptionPair.Negative = owner
+							newPositive := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.WHITE)
+							pg.AssumptionPair.Positive.Insert(newPositive)
+							pg.AssumptionPair.Positive = newPositive
+							newNegative := page.NewBubble(x, y, "", page.BLACK)
+							pg.AssumptionPair.Negative.Insert(newNegative)
+							pg.AssumptionPair.Negative = newNegative
+						}
 					}
-				}
-				if owner.Kind == page.WHITE {
-					if pg.AssumptionPair.Negative != nil && pg.AssumptionPair.Negative == owner.Parent {
-						// create new bubbles for assumption pair
-						pg.AssumptionPair.Positive = owner
-						newPositive := page.NewBubble(x, y, "", page.WHITE)
-						pg.AssumptionPair.Positive.Insert(newPositive)
-						pg.AssumptionPair.Positive = newPositive
-						newNegative := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.BLACK)
-						pg.AssumptionPair.Negative.Insert(newNegative)
-						pg.AssumptionPair.Negative = newNegative
+					if owner.Kind == page.WHITE {
+						if pg.AssumptionPair.Negative != nil && pg.AssumptionPair.Negative == owner.Parent {
+							// create new bubbles for assumption pair
+							pg.AssumptionPair.Positive = owner
+							newPositive := page.NewBubble(x, y, "", page.WHITE)
+							pg.AssumptionPair.Positive.Insert(newPositive)
+							pg.AssumptionPair.Positive = newPositive
+							newNegative := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.BLACK)
+							pg.AssumptionPair.Negative.Insert(newNegative)
+							pg.AssumptionPair.Negative = newNegative
+						}
 					}
 				}
 				pg.Grabbed = nil
@@ -337,6 +352,7 @@ func run() {
 					}
 
 					var innerLoop *page.Bubble
+					// add an extra buffer loop if we have multiple highlighted things, since we only want to add a loop around the highlighted ones
 					if len(pg.Highlighted) > 1 {
 						loopKind := parent.Kind
 						innerLoop = page.NewBubble(parent.X, parent.Y, "", loopKind)

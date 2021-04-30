@@ -302,7 +302,6 @@ func thresh(n int) float64 {
 }
 
 func (pg *Page) DrawPicture() *pixel.PictureData {
-	// TODO: Really need to batch all these calls to OpenGL
 	m := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(m, m.Bounds(), &image.Uniform{color.Black}, image.ZP, draw.Src)
 
