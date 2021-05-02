@@ -117,7 +117,11 @@ func run() {
 					pg.Grab(owner, x, y)
 				}
 			} else {
-				pg.Grab(owner, x, y)
+				if win.JustPressed(pixelgl.KeyLeftShift) || win.JustPressed(pixelgl.KeyLeftShift) {
+					pg.Highlighted = append(pg.Highlighted, owner)
+				} else {
+					pg.Grab(owner, x, y)
+				}
 			}
 		}
 
