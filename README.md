@@ -12,8 +12,7 @@ You can press backspace or delete to delete any bubbles, and you can drag-and-dr
 Once you've finished creating your initial statement, you can press enter to go into proof mode.
 
 Once in proof mode, you can't (barring any bugs) do any manipulations which are logically incorrect. Space still lets you create new units, and tab lets you nest your bubble in a loop of the opposite color.
-Drag-and-drop now only works when it is logically correct, and right-click drag-and-drop creates a new assumption pair, which are shown as a yellow and purple bubble. These bubbles can have new variables added to them, but putting a variable in one will put it in the other.
-If you want to assume more complicated statements, it is possible but you have to be clever about what order you do things in.
+Drag-and-drop now only works when it is logically correct, and right-click drag-and-drop creates a new assumption pair, which are shown as a yellow and purple bubble. These bubbles can be manipulated as in create mode, but anything you do will also happen to the corresponding bubble. Right-click again when you're finished creating your assumption.
 
 At any time, you can grab a bubble to move it, and you can jerk a grabbed bubble to detach it from its parent, so you can move it somewhere else (but it will snap back to its original place if that's not allowed).
 
