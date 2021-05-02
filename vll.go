@@ -222,11 +222,10 @@ func run() {
 				// delete a loop in proof mode
 				if pg.Grabbed == nil {
 					pg.Execute(func() {
-						subject := pg.Highlighted[0]
-						if subject == pg.AssumptionPair.Positive || subject == pg.AssumptionPair.Negative {
-							return
-						}
 						for _, highlighted := range pg.Highlighted {
+							if pg.AssumptionPair != nil && (highlighted == pg.AssumptionPair.Positive || highlighted == pg.AssumptionPair.Negative) {
+								return
+							}
 							if len(highlighted.Children) == 1 && highlighted.Variable == "" && highlighted.Parent != nil {
 								child := highlighted.Children[0]
 								newParent := highlighted.Parent
@@ -269,6 +268,9 @@ func run() {
 					} else {
 						pg.Execute(func() {
 							subject.Variable += str
+							if subject.AssumptionPair != nil {
+								subject.AssumptionPair.Variable += str
+							}
 						})
 					}
 					continue // don't try to interpret letters typed as variables as commands

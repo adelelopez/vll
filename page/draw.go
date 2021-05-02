@@ -15,28 +15,6 @@ func (pg *Page) childrenBoundary(b *Bubble, x, y int) float64 {
 	squaredSum, closestD2 := 0.0, math.MaxFloat64
 
 	b.Iterate(func(bub *Bubble) {
-		sign := -1.0
-		// I really like this repel effect, but it takes too long to compute
-		// need to find a better way
-		// ancestor := b.Parent
-		// for ancestor != nil {
-		// 	if ancestor == bub {
-		// 		sign = 0
-		// 		break
-		// 		// return
-		// 	}
-		// 	ancestor = ancestor.Parent
-		// }
-		// descendent := bub
-		// for descendent != nil {
-		// 	if descendent == b {
-		// 		sign = 1
-		// 		break
-		// 	}
-		// 	descendent = descendent.Parent
-		// }
-		sign = 1
-
 		// find squared distance of pixel from the circle
 		var dx, dy float64
 		dx = float64(x - bub.X)
@@ -56,15 +34,11 @@ func (pg *Page) childrenBoundary(b *Bubble, x, y int) float64 {
 				closestD2 = d2
 			}
 		} else {
-			if sign > 0 {
-				squaredSum += circSquared / d2
+			squaredSum += circSquared / d2
 
-				// keep track of the color and distance of the closest circle
-				if d2 < closestD2 && b != nil {
-					closestD2 = d2
-				}
-			} else if sign < 0 {
-				squaredSum -= circSquared / d2
+			// keep track of the color and distance of the closest circle
+			if d2 < closestD2 && b != nil {
+				closestD2 = d2
 			}
 		}
 	})
