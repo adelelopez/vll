@@ -18,13 +18,6 @@ const (
 	height = 640
 )
 
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
 // how should exponentials work?
 // we could have a new type of bubble: a blue (or red) bubble
 // these bubbles could only be single loops
@@ -119,7 +112,7 @@ func run() {
 			if owner == pg.Root {
 				pg.Highlighted = nil
 				if len(pg.Root.Children) == 0 {
-					owner = page.NewBubble(x, y, "", page.WHITE)
+					owner = pg.NewBubble(x, y, "", page.WHITE)
 					pg.Root.Insert(owner)
 					pg.Grab(owner, x, y)
 				}
@@ -130,8 +123,10 @@ func run() {
 
 		// Yank bubbles out of their parents (if change in velocity is sufficiently high)
 		if pg.Grabbed != nil && pg.Grabbed.Parent != nil && pg.Grabbed.Parent != pg.Root {
-			if pg.Grabbed.VX*pg.Grabbed.VX+pg.Grabbed.VY*pg.Grabbed.VY > 400 {
-				pg.Grabbed.Parent.Detach(pg.Grabbed)
+			if !pg.AssumptionMode || pg.Grabbed.AssumptionPair != nil {
+				if pg.Grabbed.VX*pg.Grabbed.VX+pg.Grabbed.VY*pg.Grabbed.VY > 400 {
+					pg.Execute(func() { pg.Delete(pg.Grabbed) })
+				}
 			}
 		}
 
@@ -146,8 +141,10 @@ func run() {
 		basicTxt.Color = color.White
 		b := pg.BelongsTo(x, y)
 		fmt.Fprintln(basicTxt, pg.Mode+" mode:")
-		fmt.Fprintln(basicTxt, x, y, b.Kind, b.Variable)
+		fmt.Fprintln(basicTxt, x, y, page.Name(b.Kind), b.Variable)
+		fmt.Fprintln(basicTxt)
 		fmt.Fprintln(basicTxt, pg.Root.Sprint())
+		fmt.Fprintln(basicTxt, "Assumption Mode:\n", pg.AssumptionMode)
 		basicTxt.Draw(win, pixel.IM.Scaled(basicTxt.Orig, 2))
 
 		win.SetTitle(pg.Root.String() + " | Mode: " + pg.Mode)
@@ -159,7 +156,7 @@ func run() {
 				if len(pg.Highlighted) == 1 && !pg.IsHighlighted(pg.Root) {
 					highlighted := pg.Highlighted[0]
 					if highlighted.Variable == "" {
-						highlighted.Insert(page.NewBubble(grabbedX, grabbedY, str, highlighted.Kind))
+						highlighted.Insert(pg.NewBubble(grabbedX, grabbedY, str, highlighted.Kind))
 					} else {
 						highlighted.Variable += str
 					}
@@ -170,15 +167,15 @@ func run() {
 
 			if win.JustReleased(pixelgl.MouseButtonLeft) {
 				owner := pg.NearestAlternative(x, y)
-				pg.ReleaseInto(owner)
+				pg.Execute(func() { pg.ReleaseInto(owner) })
 			}
 
 			// Right click creates new multiplicative units
 			if win.JustPressed(pixelgl.MouseButtonRight) {
 				// Insert a new bubble
 				owner := pg.BelongsTo(x, y)
-				pg.Grab(page.NewBubble(x, y, "", page.OppositeKind(owner.Kind)), x, y)
-				pg.ReleaseInto(owner)
+				pg.Grab(pg.NewBubble(x, y, "", owner.OppositeKind()), x, y)
+				pg.Execute(func() { pg.ReleaseInto(owner) })
 			}
 
 			if win.JustReleased(pixelgl.MouseButtonRight) {
@@ -189,42 +186,12 @@ func run() {
 			if win.JustPressed(pixelgl.KeyTab) {
 				// insert a loop around highlighted bubbles
 				if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-					// check that the highlighted bubbles all have the same parent
 					parent := pg.Highlighted[0].Parent
-					for _, highlighted := range pg.Highlighted {
-						if highlighted.Parent != parent {
-							continue // skip to next frame
-						}
-					}
-
-					var innerLoop *page.Bubble
-					if len(pg.Highlighted) > 1 {
-						loopKind := parent.Kind
-						innerLoop = page.NewBubble(parent.X, parent.Y, "", loopKind)
-					}
-
-					loopKind := page.OppositeKind(parent.Kind)
+					loopKind := parent.OppositeKind()
 					if len(pg.Highlighted) == 1 {
-						loopKind = page.OppositeKind(pg.Highlighted[0].Kind)
+						loopKind = pg.Highlighted[0].OppositeKind()
 					}
-					outerLoop := page.NewBubble(parent.X, parent.Y, "", loopKind)
-					parent.Insert(outerLoop)
-					if innerLoop != nil {
-						outerLoop.Insert(innerLoop)
-						for _, highlighted := range pg.Highlighted {
-							parent.Detach(highlighted)
-							innerLoop.Insert(highlighted)
-						}
-					} else {
-						for _, highlighted := range pg.Highlighted {
-							parent.Detach(highlighted)
-							outerLoop.Insert(highlighted)
-						}
-					}
-
-					outerLoop.CenterAroundChildren()
-					pg.Highlighted = []*page.Bubble{outerLoop}
-					pg.NormalizeHeight()
+					pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
 				}
 			}
 
@@ -245,94 +212,124 @@ func run() {
 			// Allow user to insert multiplicative units at will
 			if win.JustPressed(pixelgl.KeySpace) {
 				if len(pg.Highlighted) == 1 && !pg.IsHighlighted(pg.Root) {
-					highlighted := pg.Highlighted[0]
-					highlighted.Insert(page.NewBubble(grabbedX, grabbedY, "", highlighted.Kind))
+					pg.Execute(func() {
+						highlighted := pg.Highlighted[0]
+						highlighted.Insert(pg.NewBubble(grabbedX, grabbedY, "", highlighted.Kind))
+					})
 				}
 			}
 			if win.JustPressed(pixelgl.KeyBackspace) || win.JustPressed(pixelgl.KeyDelete) {
 				// delete a loop in proof mode
 				if pg.Grabbed == nil {
-					for _, highlighted := range pg.Highlighted {
-						if len(highlighted.Children) == 1 && highlighted.Variable == "" {
-							child := highlighted.Children[0]
-							newParent := highlighted.Parent
-							newParent.Detach(highlighted)
-							newParent.Insert(child)
+					pg.Execute(func() {
+						subject := pg.Highlighted[0]
+						if subject == pg.AssumptionPair.Positive || subject == pg.AssumptionPair.Negative {
+							return
 						}
-						// allow deletion of empty bubbles with a parent of the same color
-						if len(highlighted.Children) == 0 && highlighted.Variable == "" {
-							if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind {
-								highlighted.Parent.Detach(highlighted)
+						for _, highlighted := range pg.Highlighted {
+							if len(highlighted.Children) == 1 && highlighted.Variable == "" && highlighted.Parent != nil {
+								child := highlighted.Children[0]
+								newParent := highlighted.Parent
+								pg.Delete(highlighted)
+								pg.Place(newParent, child)
+							}
+							// allow deletion of empty bubbles with a parent of the same color
+							if len(highlighted.Children) == 0 && highlighted.Variable == "" {
+								if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind {
+									pg.Delete(highlighted)
+								}
 							}
 						}
-					}
-					pg.NormalizeHeight()
+					})
 				}
 			}
 			// Place grabbed bubble to new location, if possible
 			if win.JustReleased(pixelgl.MouseButtonLeft) {
 				owner := pg.NearestAlternative(x, y)
-
 				// if this is logically allowed, then do the required operations
 				if pg.CanPlaceAt(owner) {
-					pg.ReleaseInto(owner)
+					fmt.Println("can place")
+					pg.Execute(func() { pg.ReleaseInto(owner) })
 				} else {
 					// otherwise, just give it back to its original parent
-					pg.ReleaseInto(pg.GrabbedParent)
+					fmt.Println("not allowed")
+					pg.Execute(func() { pg.ReleaseInto(pg.GrabbedParent) })
 				}
+				pg.Grabbed = nil
 			}
 
 			if str := win.Typed(); strings.TrimSpace(str) != "" || win.JustPressed(pixelgl.KeySpace) {
-				if pg.InAssumptionMode() {
-					if pg.AssumptionPair.Positive.Variable == "" {
-						pg.AssumptionPair.Positive.Insert(page.NewBubble(pg.AssumptionPair.Positive.X, pg.AssumptionPair.Positive.Y, str, page.WHITE))
-						pg.AssumptionPair.Negative.Insert(page.NewBubble(pg.AssumptionPair.Negative.X, pg.AssumptionPair.Negative.Y, str, page.BLACK))
+				if pg.AssumptionMode && len(pg.Highlighted) == 1 {
+					subject := pg.Highlighted[0]
+					if subject.Variable == "" {
+						pg.Execute(func() {
+							pg.Grab(pg.NewBubble(subject.X, subject.Y, str, subject.Kind), subject.X, subject.Y)
+							pg.ReleaseInto(subject)
+						})
 					} else {
-						pg.AssumptionPair.Positive.Variable += str
-						pg.AssumptionPair.Negative.Variable += str
+						pg.Execute(func() {
+							subject.Variable += str
+						})
 					}
 					continue // don't try to interpret letters typed as variables as commands
 				}
 			}
 
 			if win.JustPressed(pixelgl.MouseButtonRight) {
-				pg.AssumptionPair = nil
-				// Right click grabs things from "the void"
 				owner := pg.BelongsTo(x, y)
-				if owner.Kind == page.BLACK {
-					pg.AssumptionPair = &page.Pair{Negative: owner}
-					pg.GrabbedAtX, pg.GrabbedAtY = x, y
-				} else if owner.Kind == page.WHITE {
-					pg.AssumptionPair = &page.Pair{Positive: owner}
-					pg.GrabbedAtX, pg.GrabbedAtY = x, y
+				if !pg.AssumptionMode && pg.AssumptionPair == nil {
+					// Right click grabs things from "the void"
+					if owner.Kind == page.BLACK {
+						pg.AssumptionPair = &page.Pair{Negative: owner}
+						pg.GrabbedAtX, pg.GrabbedAtY = x, y
+					} else if owner.Kind == page.WHITE {
+						pg.AssumptionPair = &page.Pair{Positive: owner}
+						pg.GrabbedAtX, pg.GrabbedAtY = x, y
+					}
+				} else if pg.InAssumption(owner) {
+					pg.Execute(func() {
+						newb := pg.NewBubble(x, y, "", owner.OppositeKind())
+						pg.Grab(newb, newb.X, newb.Y)
+						pg.ReleaseInto(owner)
+					})
+				} else {
+					pg.AssumptionPair = nil
+					pg.AssumptionMode = false
 				}
 			}
 
 			if win.JustReleased(pixelgl.MouseButtonRight) {
 				owner := pg.BelongsTo(x, y)
-				if pg.AssumptionPair != nil {
+				if !pg.AssumptionMode && pg.AssumptionPair != nil {
 					if owner.Kind == page.BLACK {
 						if pg.AssumptionPair.Positive != nil && pg.AssumptionPair.Positive.Parent == owner {
 							// create new bubbles for assumption pair
 							pg.AssumptionPair.Negative = owner
-							newPositive := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.WHITE)
+							newPositive := pg.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.WHITE)
 							pg.AssumptionPair.Positive.Insert(newPositive)
 							pg.AssumptionPair.Positive = newPositive
-							newNegative := page.NewBubble(x, y, "", page.BLACK)
+							newNegative := pg.NewBubble(x, y, "", page.BLACK)
 							pg.AssumptionPair.Negative.Insert(newNegative)
 							pg.AssumptionPair.Negative = newNegative
+							pg.AssumptionPair.Positive.AssumptionPair = pg.AssumptionPair.Negative
+							pg.AssumptionPair.Negative.AssumptionPair = pg.AssumptionPair.Positive
+							pg.AssumptionMode = true
+
 						}
 					}
 					if owner.Kind == page.WHITE {
 						if pg.AssumptionPair.Negative != nil && pg.AssumptionPair.Negative == owner.Parent {
 							// create new bubbles for assumption pair
 							pg.AssumptionPair.Positive = owner
-							newPositive := page.NewBubble(x, y, "", page.WHITE)
+							newPositive := pg.NewBubble(x, y, "", page.WHITE)
 							pg.AssumptionPair.Positive.Insert(newPositive)
 							pg.AssumptionPair.Positive = newPositive
-							newNegative := page.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.BLACK)
+							newNegative := pg.NewBubble(pg.GrabbedAtX, pg.GrabbedAtY, "", page.BLACK)
 							pg.AssumptionPair.Negative.Insert(newNegative)
 							pg.AssumptionPair.Negative = newNegative
+							pg.AssumptionPair.Positive.AssumptionPair = pg.AssumptionPair.Negative
+							pg.AssumptionPair.Negative.AssumptionPair = pg.AssumptionPair.Positive
+							pg.AssumptionMode = true
 						}
 					}
 				}
@@ -343,43 +340,14 @@ func run() {
 			if win.JustPressed(pixelgl.KeyTab) {
 				// insert a loop around highlighted bubbles
 				if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-					// check that the highlighted bubbles all have the same parent
-					parent := pg.Highlighted[0].Parent
-					for _, highlighted := range pg.Highlighted {
-						if highlighted.Parent != parent {
-							continue // skip to next frame
+					subject := pg.Highlighted[0]
+					if subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative {
+						loopKind := subject.Parent.OppositeKind()
+						if len(pg.Highlighted) == 1 {
+							loopKind = subject.OppositeKind()
 						}
+						pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
 					}
-
-					var innerLoop *page.Bubble
-					// add an extra buffer loop if we have multiple highlighted things, since we only want to add a loop around the highlighted ones
-					if len(pg.Highlighted) > 1 {
-						loopKind := parent.Kind
-						innerLoop = page.NewBubble(parent.X, parent.Y, "", loopKind)
-					}
-
-					loopKind := page.OppositeKind(parent.Kind)
-					if len(pg.Highlighted) == 1 {
-						loopKind = page.OppositeKind(pg.Highlighted[0].Kind)
-					}
-					outerLoop := page.NewBubble(parent.X, parent.Y, "", loopKind)
-					parent.Insert(outerLoop)
-					if innerLoop != nil {
-						outerLoop.Insert(innerLoop)
-						for _, highlighted := range pg.Highlighted {
-							parent.Detach(highlighted)
-							innerLoop.Insert(highlighted)
-						}
-					} else {
-						for _, highlighted := range pg.Highlighted {
-							parent.Detach(highlighted)
-							outerLoop.Insert(highlighted)
-						}
-					}
-
-					outerLoop.CenterAroundChildren()
-					pg.Highlighted = []*page.Bubble{outerLoop}
-					pg.NormalizeHeight()
 				}
 			}
 		}

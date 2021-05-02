@@ -19,42 +19,47 @@ const (
 	alphabet    = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
-const (
-	WHITE = iota
-	BLACK
-	BLUE
-	RED
-	BACKGROUND
+var (
+	WHITE      = Kind(color.White)
+	BLACK      = Kind(color.Black)
+	BACKGROUND = Kind(color.RGBA{
+		151,
+		151,
+		184,
+		255,
+	})
 )
 
+type Kind color.Color
+
 type Bubble struct {
-	X        int
-	Y        int
-	VX       int
-	VY       int
-	color    color.Color
-	Depth    int // leaves have depth 0
-	Height   int
-	Kind     int
-	Variable string
-	Children []*Bubble
-	Parent   *Bubble
+	X              int
+	Y              int
+	VX             int
+	VY             int
+	Depth          int // leaves have depth 0
+	Height         int
+	Kind           Kind
+	Variable       string
+	Children       []*Bubble
+	Parent         *Bubble
+	AssumptionPair *Bubble
 }
 
 func init() {
 	rand.Seed(seed)
 }
 
-func OppositeKind(k int) int {
-	switch k {
+func (b *Bubble) OppositeKind() Kind {
+	switch b.Kind {
 	case BLACK:
 		return WHITE
 	case WHITE, BACKGROUND:
 		return BLACK
-	case RED:
-		return BLUE
-	case BLUE:
-		return RED
+	// case RED:
+	// 	return BLUE
+	// case BLUE:
+	// 	return RED
 	default:
 		return BACKGROUND
 	}
@@ -64,7 +69,20 @@ func Random(min, max int) int {
 	return min + rand.Intn(max-min)
 }
 
-func NewBubble(x, y int, v string, k int) *Bubble {
+func Name(k Kind) string {
+	switch k {
+	case WHITE:
+		return "White"
+	case BLACK:
+		return "Black"
+	case BACKGROUND:
+		return "Root"
+	default:
+		return "Unknown"
+	}
+}
+
+func newBubble(x, y int, v string, k Kind) *Bubble {
 	return &Bubble{
 		X:        x,
 		Y:        y,
@@ -216,6 +234,7 @@ func (b *Bubble) normalizeHeight() {
 }
 
 func (b *Bubble) Detach(child *Bubble) {
+	fmt.Println("detaching")
 	if b == nil {
 		return
 	}
