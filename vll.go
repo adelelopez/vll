@@ -159,27 +159,27 @@ func run() {
 			// New bubbles with variable names are created when text is typed
 			if str := win.Typed(); strings.TrimSpace(str) != "" || win.JustPressed(pixelgl.KeySpace) {
 				switch str {
-				case "!":
-					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						subject := pg.Highlighted[0]
-						if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
-							loopKind := page.BLUE
-							pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
-						}
-					}
-				case "?":
-					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						// is it confusing if this doesn't put a loop around things?
-						subject := pg.Highlighted[0]
-						if subject.Kind != page.BLUE && subject.Kind != page.RED {
-							pg.Execute(func() {
-								newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
-								pg.Grab(newb, subject.X, subject.Y)
-								pg.ReleaseInto(subject)
-								pg.Loop(page.RED, newb)
-							})
-						}
-					}
+				// case "!":
+				// 	if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
+				// 		subject := pg.Highlighted[0]
+				// 		if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
+				// 			loopKind := page.BLUE
+				// 			pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
+				// 		}
+				// 	}
+				// case "?":
+				// 	if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
+				// 		// is it confusing if this doesn't put a loop around things?
+				// 		subject := pg.Highlighted[0]
+				// 		if subject.Kind != page.BLUE && subject.Kind != page.RED {
+				// 			pg.Execute(func() {
+				// 				newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
+				// 				pg.Grab(newb, subject.X, subject.Y)
+				// 				pg.ReleaseInto(subject)
+				// 				pg.Loop(page.RED, newb)
+				// 			})
+				// 		}
+				// 	}
 				default:
 					if len(pg.Highlighted) == 1 && !pg.IsHighlighted(pg.Root) {
 						highlighted := pg.Highlighted[0]
@@ -297,33 +297,33 @@ func run() {
 
 			if str := win.Typed(); strings.TrimSpace(str) != "" || win.JustPressed(pixelgl.KeySpace) {
 				switch str {
-				case "!":
-					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						subject := pg.Highlighted[0]
-						if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
-							loopKind := page.BLUE
-							for _, highlighted := range pg.Highlighted {
-								if highlighted.Kind != page.BLUE && !(highlighted.Variable == "" &&
-									len(highlighted.Children) == 0 && highlighted.Kind == page.WHITE) {
-									continue
-								}
-							}
-							pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
-						}
-					}
-				case "?":
-					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						// TODO: enter contingency mode (similar to assumption mode)
-						subject := pg.Highlighted[0]
-						if subject.Kind != page.BLUE && subject.Kind != page.RED {
-							pg.Execute(func() {
-								newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
-								pg.Grab(newb, subject.X, subject.Y)
-								pg.ReleaseInto(subject)
-								pg.Loop(page.RED, newb)
-							})
-						}
-					}
+				// case "!":
+				// 	if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
+				// 		subject := pg.Highlighted[0]
+				// 		if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
+				// 			loopKind := page.BLUE
+				// 			for _, highlighted := range pg.Highlighted {
+				// 				if highlighted.Kind != page.BLUE && !(highlighted.Variable == "" &&
+				// 					len(highlighted.Children) == 0 && highlighted.Kind == page.WHITE) {
+				// 					continue
+				// 				}
+				// 			}
+				// 			pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
+				// 		}
+				// 	}
+				// case "?":
+				// 	if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
+				// 		// TODO: enter contingency mode (similar to assumption mode)
+				// 		subject := pg.Highlighted[0]
+				// 		if subject.Kind != page.BLUE && subject.Kind != page.RED {
+				// 			pg.Execute(func() {
+				// 				newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
+				// 				pg.Grab(newb, subject.X, subject.Y)
+				// 				pg.ReleaseInto(subject)
+				// 				pg.Loop(page.RED, newb)
+				// 			})
+				// 		}
+				// 	}
 				default:
 					if pg.AssumptionMode && len(pg.Highlighted) == 1 {
 						subject := pg.Highlighted[0]
