@@ -20,8 +20,20 @@ const (
 )
 
 var (
-	WHITE      = Kind(color.White)
-	BLACK      = Kind(color.Black)
+	WHITE = Kind(color.White)
+	BLACK = Kind(color.Black)
+	BLUE  = Kind(color.RGBA{
+		17,
+		205,
+		205,
+		255,
+	})
+	RED = Kind(color.RGBA{
+		238,
+		50,
+		50,
+		255,
+	})
 	BACKGROUND = Kind(color.RGBA{
 		151,
 		151,
@@ -56,10 +68,22 @@ func (b *Bubble) OppositeKind() Kind {
 		return WHITE
 	case WHITE, BACKGROUND:
 		return BLACK
-	// case RED:
-	// 	return BLUE
-	// case BLUE:
-	// 	return RED
+	case RED:
+		return BLUE
+	case BLUE:
+		return RED
+	default:
+		return BACKGROUND
+	}
+}
+
+func (b *Bubble) OppositePolarity() Kind {
+	switch b.Kind {
+	case BLACK, RED:
+		return WHITE
+	case WHITE, BLUE, BACKGROUND:
+		return BLACK
+
 	default:
 		return BACKGROUND
 	}
@@ -75,6 +99,10 @@ func Name(k Kind) string {
 		return "White"
 	case BLACK:
 		return "Black"
+	case BLUE:
+		return "Blue"
+	case RED:
+		return "Red"
 	case BACKGROUND:
 		return "Root"
 	default:
@@ -109,16 +137,7 @@ func (b *Bubble) Sprint() string {
 		if bub.Variable != "" {
 			s += bub.Variable
 		} else {
-			switch bub.Kind {
-			case WHITE:
-				s += "WHITE"
-			case BLACK:
-				s += "BLACK"
-			case BACKGROUND:
-				s += "BACKGROUND"
-			default:
-				s += "Huh?"
-			}
+			s += Name(bub.Kind)
 		}
 		s += fmt.Sprintf("(%v)", bub.Height)
 		s += "\n"
