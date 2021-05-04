@@ -11,6 +11,17 @@ import (
 	"github.com/faiface/pixel/text"
 )
 
+func thresh(bub *Bubble, iter int) float64 {
+	n := float64(bub.Depth - iter - bub.Height)
+	if bub.Variable == "" {
+		n++
+	}
+	if bub.Kind == BLUE || bub.Kind == RED {
+		n += 0.5
+	}
+	return 0.5 * math.Pow(1.311, n)
+}
+
 func (pg *Page) childrenBoundary(b *Bubble, x, y int) float64 {
 	squaredSum, closestD2 := 0.0, math.MaxFloat64
 
@@ -70,23 +81,26 @@ func (pg *Page) colorBubble(b *Bubble, x, y int) color.Color {
 				A: 255,
 			}
 		}
-	} else if pg.AssumptionMode {
-		if pg.AssumptionPair.Positive.IsAbove(b) || pg.AssumptionPair.Negative.IsAbove(b) {
-			if b.Kind == WHITE {
-				clr = color.RGBA{
-					R: 255,
-					G: 255,
-					B: 100,
-					A: 255,
-				}
+		if b.Kind == BLUE && (x/pxSize-y/pxSize)%2 == 0 {
+			clr = color.RGBA{
+				R: 17,
+				G: 151,
+				B: 205,
+				A: 255,
 			}
-			if b.Kind == BLACK {
-				clr = color.RGBA{
-					R: 50,
-					G: 0,
-					B: 135,
-					A: 255,
-				}
+		}
+		if b.Kind == RED && (x/pxSize-y/pxSize)%2 == 0 {
+			clr = color.RGBA{
+				R: 238,
+				G: 104,
+				B: 50,
+				A: 255,
+			}
+		}
+	} else if pg.AssumptionMode {
+		if !pg.AssumptionPair.Positive.IsAbove(b) && !pg.AssumptionPair.Negative.IsAbove(b) {
+			if (x/pxSize-y/pxSize)%2 == 0 {
+				clr = BACKGROUND
 			}
 		}
 	}
@@ -100,11 +114,7 @@ func (p *Page) BelongsTo(x, y int) *Bubble {
 	p.Root.bfs(func(bub *Bubble) {
 		dist := p.childrenBoundary(bub, x, y)
 		for i := bub.Depth; i > 0; i-- {
-			n := (bub.Depth - i)
-			if bub.Variable == "" {
-				n++
-			}
-			if dist > thresh(n-bub.Height) {
+			if dist > thresh(bub, i) {
 				owner = bub
 			}
 		}
@@ -119,11 +129,7 @@ func (p *Page) BelongsToGrabbed(x, y int) *Bubble {
 	p.Grabbed.bfs(func(bub *Bubble) {
 		dist := p.childrenBoundary(bub, x, y)
 		for i := bub.Depth; i > 0; i-- {
-			n := (bub.Depth - i)
-			if bub.Variable == "" {
-				n++
-			}
-			if dist > thresh(n-bub.Height) {
+			if dist > thresh(bub, i) {
 				owner = bub
 			}
 		}
@@ -142,11 +148,7 @@ func (p *Page) NearestAlternative(x, y int) *Bubble {
 		dist := p.childrenBoundary(bub, x, y)
 
 		for i := bub.Depth; i > 0; i-- {
-			n := (bub.Depth - i)
-			if bub.Variable == "" {
-				n++
-			}
-			if dist > thresh(n-bub.Height) {
+			if dist > thresh(bub, i) {
 				excluded := false
 				if p.Grabbed != nil {
 					p.Grabbed.Iterate(func(ex *Bubble) {
@@ -162,10 +164,6 @@ func (p *Page) NearestAlternative(x, y int) *Bubble {
 		}
 	})
 	return owner
-}
-
-func thresh(n int) float64 {
-	return 0.5 * math.Pow(1.311, float64(n))
 }
 
 func (pg *Page) DrawPicture() *pixel.PictureData {

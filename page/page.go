@@ -200,8 +200,10 @@ func (pg *Page) Place(parent, b *Bubble) {
 
 func (pg *Page) Delete(b *Bubble) {
 	fmt.Println("deleting")
-	if b.AssumptionPair != nil && b.AssumptionPair != pg.AssumptionPair.Positive && b.AssumptionPair != pg.AssumptionPair.Negative {
-		b.AssumptionPair.Parent.Detach(b.AssumptionPair)
+	if b.AssumptionPair != nil {
+		if b.AssumptionPair != pg.AssumptionPair.Positive && b.AssumptionPair != pg.AssumptionPair.Negative {
+			b.AssumptionPair.Parent.Detach(b.AssumptionPair)
+		}
 	}
 	b.Parent.Detach(b)
 }
@@ -275,4 +277,12 @@ func (pg *Page) Execute(f func()) {
 	f()
 	pg.ProcessNewBubbles()
 	pg.NormalizeHeight()
+}
+
+func (pg *Page) ExitAssumptionMode() {
+	pg.AssumptionPair = nil
+	pg.AssumptionMode = false
+	pg.Root.Iterate(func(b *Bubble) {
+		b.AssumptionPair = nil
+	})
 }

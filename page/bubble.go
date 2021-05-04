@@ -77,6 +77,18 @@ func (b *Bubble) OppositeKind() Kind {
 	}
 }
 
+func (b *Bubble) OppositePolarity() Kind {
+	switch b.Kind {
+	case BLACK, RED:
+		return WHITE
+	case WHITE, BLUE, BACKGROUND:
+		return BLACK
+
+	default:
+		return BACKGROUND
+	}
+}
+
 func Random(min, max int) int {
 	return min + rand.Intn(max-min)
 }
