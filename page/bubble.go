@@ -89,6 +89,17 @@ func (b *Bubble) OppositePolarity() Kind {
 	}
 }
 
+func (b *Bubble) Copy() *Bubble {
+	// create a new bubble
+	newb := newBubble(b.X, b.Y, b.Variable, b.Kind)
+	// for each child of the original, create a copy of the bubble and append it
+	for _, child := range b.Children {
+		twin := child.Copy()
+		newb.Insert(twin)
+	}
+	return newb
+}
+
 func Random(min, max int) int {
 	return min + rand.Intn(max-min)
 }

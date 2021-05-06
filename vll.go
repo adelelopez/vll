@@ -23,7 +23,13 @@ const (
 // these bubbles could only be single loops
 // that doesn't seem so hard
 // characters ? and ! could work like tab for creating them
-//   note that the assumption pair code would need to be more complete for this to work
+// if blue ring and something inside it are highlighted, delete will delete the whole thing
+// should red rings just be freely editable inside? -- definitely not, that's logically incorrect
+// ? creates a red loop around things, which always works
+// if it's around a unit, you enter contingency mode, which lets you freely edit the interior until you exit it
+// ! requires copying
+// i think it makes sense to implement copying with double-clicks, a double click in a blue loop copies the contents, and it is grabbed on the second click
+// maybe it also makes sense to implement ctrl-c ctrl-v copy-paste controls too -- this would also allow for copying multiple bubbles at once
 
 // okay, how about additives?
 // and additive bubble consists of an outershell, along with a
@@ -82,6 +88,8 @@ func run() {
 
 	grabbedX := 0
 	grabbedY := 0
+	clickTime := time.Now()
+	var clickOwner *page.Bubble
 
 	for !win.Closed() {
 		win.Update()
@@ -103,27 +111,6 @@ func run() {
 		}
 		if win.JustPressed(pixelgl.KeyH) {
 			// toggle help screen with all the commands
-		}
-		// Left click has drag and drop behavior
-		if win.JustPressed(pixelgl.MouseButtonLeft) {
-			owner := pg.BelongsTo(x, y)
-			grabbedX = x
-			grabbedY = y
-			if owner == pg.Root {
-				pg.Highlighted = nil
-				if len(pg.Root.Children) == 0 {
-					owner = pg.NewBubble(x, y, "", page.WHITE)
-					pg.Root.Insert(owner)
-					pg.Grab(owner, x, y)
-				}
-			} else {
-				if win.Pressed(pixelgl.KeyLeftShift) || win.Pressed(pixelgl.KeyLeftShift) {
-					fmt.Println("shifty")
-					pg.Highlighted = append(pg.Highlighted, owner)
-				} else {
-					pg.Grab(owner, x, y)
-				}
-			}
 		}
 
 		// Yank bubbles out of their parents (if change in velocity is sufficiently high)
@@ -196,6 +183,38 @@ func run() {
 					}
 				}
 			}
+			// Left click has drag and drop behavior
+			if win.JustPressed(pixelgl.MouseButtonLeft) {
+				owner := pg.BelongsTo(x, y)
+				grabbedX = x
+				grabbedY = y
+				if owner == clickOwner && time.Now().Sub(clickTime) < time.Duration(350*time.Millisecond) {
+					fmt.Println("doubleclick")
+					newb := owner.Copy()
+					pg.Place(owner.Parent, newb)
+					pg.Grab(newb, x, y)
+				} else {
+					clickTime = time.Now()
+					clickOwner = owner
+					pg.Grab(owner, x, y)
+				}
+				if owner == pg.Root {
+					pg.Highlighted = nil
+					if len(pg.Root.Children) == 0 {
+						owner = pg.NewBubble(x, y, "", page.WHITE)
+						pg.Root.Insert(owner)
+						pg.Grab(owner, x, y)
+					}
+				} else {
+					if win.Pressed(pixelgl.KeyLeftShift) || win.Pressed(pixelgl.KeyLeftShift) {
+						fmt.Println("shifty")
+						pg.Highlighted = append(pg.Highlighted, owner)
+					} else {
+						pg.Grab(owner, x, y)
+					}
+				}
+
+			}
 
 			if win.JustReleased(pixelgl.MouseButtonLeft) {
 				owner := pg.NearestAlternative(x, y)
@@ -262,6 +281,7 @@ func run() {
 							if pg.AssumptionPair != nil && (highlighted == pg.AssumptionPair.Positive || highlighted == pg.AssumptionPair.Negative) {
 								return
 							}
+
 							// TODO: if a blue loop is highlighted, along with any of its descendents, delete the entire bubble
 
 							if len(highlighted.Children) == 1 && highlighted.Variable == "" && highlighted.Parent != nil && highlighted.Kind != page.RED {
@@ -270,14 +290,57 @@ func run() {
 								pg.Delete(highlighted)
 								pg.Place(newParent, child)
 							}
+
 							// allow deletion of empty bubbles with a parent of the same color
 							if len(highlighted.Children) == 0 && highlighted.Variable == "" {
-								if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind {
+								if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind && highlighted.Kind != page.RED {
 									pg.Delete(highlighted)
 								}
 							}
 						}
+						// only delete a red loop if it's child is black and its grandkids are red loops
+						if len(pg.Highlighted) == 1 && pg.Highlighted[0].Kind == page.RED {
+							subject := pg.Highlighted[0]
+							if len(subject.Children) == 1 && subject.Children[0].Kind == page.BLACK {
+								child := subject.Children[0]
+								allred := true
+								for _, grandkid := range child.Children {
+									if grandkid.Kind != page.RED {
+										allred = false
+									}
+								}
+								if allred {
+									newParent := subject.Parent
+									pg.Delete(subject)
+									pg.Place(newParent, child)
+								}
+							}
+						}
 					})
+				}
+			}
+			// Left click has drag and drop behavior
+			if win.JustPressed(pixelgl.MouseButtonLeft) {
+				owner := pg.BelongsTo(x, y)
+				grabbedX = x
+				grabbedY = y
+
+				if win.Pressed(pixelgl.KeyLeftShift) || win.Pressed(pixelgl.KeyLeftShift) {
+					fmt.Println("shifty")
+					pg.Highlighted = append(pg.Highlighted, owner)
+				} else {
+					if owner == clickOwner && time.Now().Sub(clickTime) < time.Duration(350*time.Millisecond) {
+						fmt.Println("doubleclick")
+						if owner.Kind == page.BLUE {
+							newb := owner.Copy()
+							pg.Place(owner.Parent, newb)
+							pg.Grab(newb, x, y)
+						}
+					} else {
+						clickTime = time.Now()
+						clickOwner = owner
+						pg.Grab(owner, x, y)
+					}
 				}
 			}
 			// Place grabbed bubble to new location, if possible
@@ -313,15 +376,19 @@ func run() {
 					}
 				case "?":
 					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						// TODO: enter contingency mode (similar to assumption mode)
 						subject := pg.Highlighted[0]
-						if subject.Kind != page.BLUE && subject.Kind != page.RED {
-							pg.Execute(func() {
-								newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
-								pg.Grab(newb, subject.X, subject.Y)
-								pg.ReleaseInto(subject)
-								pg.Loop(page.RED, newb)
-							})
+						if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
+							loopKind := page.RED
+							for _, highlighted := range pg.Highlighted {
+								if highlighted.Kind != page.BLUE && !(highlighted.Variable == "" &&
+									len(highlighted.Children) == 0 && highlighted.Kind == page.WHITE) {
+									continue
+								}
+							}
+							pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
+							if len(pg.Highlighted) == 1 && pg.Highlighted[0].Variable == "" {
+								// TODO: Enter contingency mode
+							}
 						}
 					}
 				default:
