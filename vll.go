@@ -43,12 +43,20 @@ const (
 // Implement hover highlighting (so you can see where you're dropping something)
 //  do this with a map so it's fast
 // To look okay, we need to prevent bubbles from ever getting split. Not sure how to enforce this.
+
+// really need to clean this up a bit
+// every user input has a few steps it needs to go through
+// 1. Check to see if the operation is allowed in the current context
+// 2. Perform the operation or revert back to before
+// 3. Record which operations(s) were preformed, and what the result is
+// 4. Finish up any loose ends (like what Execute does now)
+
 func update(pg *page.Page) {
 	pg.Root.Iterate(func(b *page.Bubble) {
 		for i := 0; i < len(b.Children); i++ {
 			for j := 0; j < len(b.Children); j++ {
 				b.Children[j].Iterate(func(nibling *page.Bubble) {
-					if page.Distance(b.Children[i], nibling) < float64(30.0*(b.Children[i].Height+nibling.Height)+85) &&
+					if page.Distance(b.Children[i], nibling) < float64(30*(b.Children[i].Height+nibling.Height)+85) &&
 						b.Children[i] != pg.Grabbed && nibling != pg.Grabbed && i != j {
 						dx := 0
 						dy := 0
@@ -63,6 +71,9 @@ func update(pg *page.Page) {
 					}
 				})
 			}
+		}
+		if len(b.Children) == 1 {
+			b.CenterAroundChildren()
 		}
 	})
 }
@@ -136,10 +147,10 @@ func run() {
 		fmt.Fprintln(basicTxt, x, y, page.Name(b.Kind), b.Variable)
 		fmt.Fprintln(basicTxt)
 		fmt.Fprintln(basicTxt, pg.Root.Sprint())
-		fmt.Fprintln(basicTxt, "Assumption Mode:\n", pg.AssumptionMode)
+		fmt.Fprintln(basicTxt, "Assumption Mode:\n", pg.AssumptionMode, pg.AssumptionPair)
 		basicTxt.Draw(win, pixel.IM.Scaled(basicTxt.Orig, 2))
 
-		win.SetTitle(pg.Root.String() + " | Mode: " + pg.Mode)
+		win.SetTitle(pg.Root.Tolestra() + " | Mode: " + pg.Mode)
 
 		switch pg.Mode {
 		case "Create":
@@ -156,15 +167,12 @@ func run() {
 					}
 				case "?":
 					if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
-						// is it confusing if this doesn't put a loop around things?
-						subject := pg.Highlighted[0]
-						if subject.Kind != page.BLUE && subject.Kind != page.RED {
-							pg.Execute(func() {
-								newb := pg.NewBubble(subject.X, subject.Y, "", subject.Kind)
-								pg.Grab(newb, subject.X, subject.Y)
-								pg.ReleaseInto(subject)
-								pg.Loop(page.RED, newb)
-							})
+						if len(pg.Highlighted) > 0 && pg.Grabbed == nil {
+							subject := pg.Highlighted[0]
+							if pg.AssumptionPair == nil || (subject != pg.AssumptionPair.Positive && subject != pg.AssumptionPair.Negative) {
+								loopKind := page.RED
+								pg.Execute(func() { pg.Loop(loopKind, pg.Highlighted...) })
+							}
 						}
 					}
 				default:
@@ -218,7 +226,7 @@ func run() {
 
 			if win.JustReleased(pixelgl.MouseButtonLeft) {
 				owner := pg.NearestAlternative(x, y)
-				if owner.Kind != page.RED && owner.Kind != page.BLUE {
+				if owner.Kind != page.RED && owner.Kind != page.BLUE && pg.Grabbed != nil {
 					pg.Execute(func() { pg.ReleaseInto(owner) })
 				}
 				pg.Grabbed = nil
@@ -258,10 +266,11 @@ func run() {
 				// delete a loop in proof mode
 				if pg.Grabbed == nil {
 					pg.Execute(func() {
+						fmt.Println("deleting")
 						for _, highlighted := range pg.Highlighted {
 							newParent := highlighted.Parent
+							pg.Delete(highlighted)
 							for _, child := range highlighted.Children {
-								pg.Delete(highlighted)
 								pg.Place(newParent, child)
 							}
 						}
@@ -277,14 +286,18 @@ func run() {
 				// delete a loop in proof mode
 				if pg.Grabbed == nil {
 					pg.Execute(func() {
+						var blue *page.Bubble
 						for _, highlighted := range pg.Highlighted {
 							if pg.AssumptionPair != nil && (highlighted == pg.AssumptionPair.Positive || highlighted == pg.AssumptionPair.Negative) {
 								return
 							}
 
-							// TODO: if a blue loop is highlighted, along with any of its descendents, delete the entire bubble
+							// if a blue loop is highlighted, along with any of its descendents (but nothing else), delete the entire bubble
+							if highlighted.Kind == page.BLUE {
+								blue = highlighted
+							}
 
-							if len(highlighted.Children) == 1 && highlighted.Variable == "" && highlighted.Parent != nil && highlighted.Kind != page.RED {
+							if len(highlighted.Children) == 1 && highlighted.Variable == "" && highlighted.Parent != nil && highlighted.IsMult() {
 								child := highlighted.Children[0]
 								newParent := highlighted.Parent
 								pg.Delete(highlighted)
@@ -293,8 +306,23 @@ func run() {
 
 							// allow deletion of empty bubbles with a parent of the same color
 							if len(highlighted.Children) == 0 && highlighted.Variable == "" {
-								if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind && highlighted.Kind != page.RED {
+								if highlighted.Parent != nil && highlighted.Parent.Kind == highlighted.Kind && highlighted.IsMult() {
 									pg.Delete(highlighted)
+								}
+							}
+						}
+						if blue != nil {
+							fmt.Println("blue")
+
+							if len(pg.Highlighted) == 1 {
+								for _, child := range blue.Children {
+									newParent := blue.Parent
+									pg.Delete(blue)
+									pg.Place(newParent, child)
+								}
+							} else {
+								if page.LCA(pg.Highlighted...) == blue {
+									pg.Delete(blue)
 								}
 							}
 						}
@@ -392,7 +420,9 @@ func run() {
 						}
 					}
 				default:
-					if pg.AssumptionMode && len(pg.Highlighted) == 1 {
+					str = strings.TrimSpace(str)
+
+					if pg.AssumptionMode && len(pg.Highlighted) == 1 || strings.TrimSpace(str) == "" {
 						subject := pg.Highlighted[0]
 						if subject.Variable == "" {
 							pg.Execute(func() {
@@ -426,7 +456,7 @@ func run() {
 				} else if pg.InAssumption(owner) {
 					pg.Execute(func() {
 						if owner.Kind != page.RED && owner.Kind != page.BLUE {
-							newb := pg.NewBubble(x, y, "", owner.OppositePolarity())
+							newb := pg.NewBubble(x, y, "", owner.Kind)
 							pg.Grab(newb, newb.X, newb.Y)
 							pg.ReleaseInto(owner)
 						}
@@ -452,7 +482,8 @@ func run() {
 							pg.AssumptionPair.Positive.AssumptionPair = pg.AssumptionPair.Negative
 							pg.AssumptionPair.Negative.AssumptionPair = pg.AssumptionPair.Positive
 							pg.AssumptionMode = true
-
+						} else {
+							pg.ExitAssumptionMode()
 						}
 					}
 					if owner.Kind == page.WHITE {
@@ -468,6 +499,8 @@ func run() {
 							pg.AssumptionPair.Positive.AssumptionPair = pg.AssumptionPair.Negative
 							pg.AssumptionPair.Negative.AssumptionPair = pg.AssumptionPair.Positive
 							pg.AssumptionMode = true
+						} else {
+							pg.ExitAssumptionMode()
 						}
 					}
 				}

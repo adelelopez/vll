@@ -58,6 +58,12 @@ type Bubble struct {
 	AssumptionPair *Bubble
 }
 
+type ByDepth []*Bubble
+
+func (a ByDepth) Len() int           { return len(a) }
+func (a ByDepth) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByDepth) Less(i, j int) bool { return a[i].Depth < a[j].Depth }
+
 func init() {
 	rand.Seed(seed)
 }
@@ -77,6 +83,10 @@ func (b *Bubble) OppositeKind() Kind {
 	}
 }
 
+func (b *Bubble) IsMult() bool {
+	return b.Kind == BLACK || b.Kind == WHITE
+}
+
 func (b *Bubble) OppositePolarity() Kind {
 	switch b.Kind {
 	case BLACK, RED:
@@ -87,6 +97,37 @@ func (b *Bubble) OppositePolarity() Kind {
 	default:
 		return BACKGROUND
 	}
+}
+
+// TODO: use more efficient algorithm, segmented tree is probably a good fit
+func LCA(bubs ...*Bubble) *Bubble {
+	if bubs == nil {
+		return nil
+	}
+	if len(bubs) == 1 {
+		return bubs[0]
+	}
+	if len(bubs) == 2 {
+		var newb *Bubble
+		if bubs[0].IsAbove(bubs[1]) {
+			return bubs[0]
+		} else if bubs[1].IsAbove(bubs[0]) {
+			return bubs[1]
+		} else if bubs[0].Depth < bubs[1].Depth {
+			newb = bubs[0].Parent
+			if newb == nil {
+				return nil
+			}
+			return LCA(newb, bubs[1])
+		} else {
+			newb = bubs[1].Parent
+			if newb == nil {
+				return nil
+			}
+			return LCA(bubs[0], newb)
+		}
+	}
+	return LCA(LCA(bubs[0:len(bubs)/2]...), LCA(bubs[len(bubs)/2:]...))
 }
 
 func (b *Bubble) Copy() *Bubble {
@@ -156,7 +197,7 @@ func (b *Bubble) Sprint() string {
 	return s
 }
 
-func (b *Bubble) String() string {
+func (b *Bubble) Tolestra() string {
 	if len(b.Children) == 0 {
 		if b.Kind == WHITE {
 			if b.Variable == "" {
@@ -175,17 +216,32 @@ func (b *Bubble) String() string {
 	childrenStrings := make([]string, 0, len(b.Children))
 
 	for _, child := range b.Children {
-		childrenStrings = append(childrenStrings, child.String())
+		childrenStrings = append(childrenStrings, child.Tolestra())
 	}
 	sort.Sort(sort.StringSlice(childrenStrings))
 
+	str := ""
 	if len(b.Children) <= 1 {
-		return strings.Join(childrenStrings, "")
+		str = strings.Join(childrenStrings, "")
+		if b.Kind == BLUE {
+			str = "!" + strings.Join(childrenStrings, "")
+		}
+		if b.Kind == RED {
+			str = "?" + strings.Join(childrenStrings, "")
+		}
+		return str
 	}
-	if b.Kind == BLACK {
-		return "(" + strings.Join(childrenStrings, " + ") + ")"
+	switch b.Kind {
+	case WHITE:
+		str = "(" + strings.Join(childrenStrings, " * ") + ")"
+	case BLACK:
+		str = "(" + strings.Join(childrenStrings, " + ") + ")"
+	case BLUE:
+		str = "!(" + strings.Join(childrenStrings, " * ") + ")"
+	case RED:
+		str = "?(" + strings.Join(childrenStrings, " + ") + ")"
 	}
-	return "(" + strings.Join(childrenStrings, " * ") + ")"
+	return str
 }
 
 func (b *Bubble) Opposite() string {
@@ -207,17 +263,33 @@ func (b *Bubble) Opposite() string {
 	childrenStrings := make([]string, 0, len(b.Children))
 
 	for _, child := range b.Children {
-		childrenStrings = append(childrenStrings, child.String())
+		childrenStrings = append(childrenStrings, child.Opposite())
 	}
 	sort.Sort(sort.StringSlice(childrenStrings))
 
+	str := ""
 	if len(b.Children) <= 1 {
-		return strings.Join(childrenStrings, "")
+		str = strings.Join(childrenStrings, "")
+		if b.Kind == BLUE {
+			str = "?" + strings.Join(childrenStrings, "")
+		}
+		if b.Kind == RED {
+			str = "!" + strings.Join(childrenStrings, "")
+		}
+		return str
 	}
-	if b.Kind == WHITE {
-		return "(" + strings.Join(childrenStrings, " + ") + ")"
+
+	switch b.Kind {
+	case WHITE:
+		str = "(" + strings.Join(childrenStrings, " + ") + ")"
+	case BLACK:
+		str = "(" + strings.Join(childrenStrings, " * ") + ")"
+	case BLUE:
+		str = "?(" + strings.Join(childrenStrings, " + ") + ")"
+	case RED:
+		str = "!(" + strings.Join(childrenStrings, " * ") + ")"
 	}
-	return "(" + strings.Join(childrenStrings, " * ") + ")"
+	return str
 }
 
 func (b *Bubble) bfs(f func(*Bubble)) {
@@ -235,6 +307,10 @@ func (b *Bubble) bfs(f func(*Bubble)) {
 func (b *Bubble) Insert(child *Bubble) *Bubble {
 	if b == nil {
 		return nil
+	}
+	if child.IsAbove(b) {
+		return nil
+		panic("cyclic tree formed!")
 	}
 	for _, kiddo := range b.Children {
 		if kiddo == child {
@@ -346,6 +422,9 @@ func (b *Bubble) Siblings() []*Bubble {
 }
 
 func (b *Bubble) IsAbove(other *Bubble) bool {
+	if other == nil {
+		return false
+	}
 	ancestor := other
 
 	for ancestor != nil {
