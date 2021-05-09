@@ -132,13 +132,29 @@ func (pg *Page) CanPlaceAt(other *Bubble) bool {
 	}
 	if pg.GrabbedParent != nil {
 		switch pg.GrabbedParent.Kind {
-		case WHITE:
+		case WHITE, BLUE:
 			if pg.GrabbedParent.IsAbove(other) {
+
+				between := other
+				for !between.IsMult() {
+					between = between.Parent
+				}
+				for between != pg.GrabbedParent {
+					if !between.IsMult() {
+						fmt.Println("between")
+						return false
+					}
+					between = between.Parent
+				}
+
 				if other.Kind == WHITE {
 					return true
 				}
-				if other.Kind == BLACK {
-					if pg.Grabbed.String() == other.Opposite() {
+				if other.Kind == BLACK || other.Kind == RED {
+					fmt.Println("almost")
+					fmt.Println(pg.Grabbed.Tolestra())
+					fmt.Println(other.Opposite())
+					if pg.Grabbed.Tolestra() == other.Opposite() {
 						other.Parent.Detach(other)
 						pg.GrabbedParent.Detach(pg.Grabbed)
 						pg.Grabbed = nil
@@ -149,8 +165,15 @@ func (pg *Page) CanPlaceAt(other *Bubble) bool {
 				}
 			}
 			return false
-		case BLACK:
+		case BLACK, RED:
 			if other.IsAbove(pg.GrabbedParent) && other.Kind == BLACK {
+				between := other
+				for between != pg.GrabbedParent {
+					if !between.IsMult() {
+						return false
+					}
+					between = between.Parent
+				}
 				return true
 			}
 			return false
